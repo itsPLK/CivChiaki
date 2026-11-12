@@ -1,0 +1,15 @@
+{
+  "emsdk": {
+    "url": "https://github.com/emscripten-core/emsdk.git",
+    "commit": "3d6d8ee910466516a53e665b86458faa81dae9ba",
+    "version": "3.1.74"
+  },
+  "mbedtls": {
+    "url": "https://github.com/Mbed-TLS/mbedtls.git",
+    "commit": "5e146adef63b326b04282252639bebc2730939c6"
+  },
+  "nanopb": {
+    "url": "https://github.com/nanopb/nanopb.git",
+    "commit": "160d4f09e5fabb2b66aa2dea32d4f38ace2c4b3f"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "civchiaki",
+  "private": true,
+  "scripts": {
+    "bootstrap": "python3 -B tools/bootstrap.py",
+    "build": "python3 -B tools/build.py",
+    "package": "python3 -B tools/package_payload.py --directory . --non-interactive -o dist/chiaki.civapp && python3 -B tools/package_payload.py --inspect dist/chiaki.civapp",
+    "test": "node --test tests/crypto.cjs tests/native-crypto.cjs tests/fec.cjs tests/worker.cjs tests/worker-transfer.cjs tests/store.cjs tests/native-storage.cjs tests/h264.cjs tests/media-queues.cjs tests/native-io.cjs tests/controller.cjs tests/native-texture.cjs tests/key-stream-cache.cjs tests/heap-move.cjs",
+    "test:package": "node tests/package-smoke.cjs",
+    "test:runtime": "node --test tests/runtime/*.cjs tests/takion-ack.cjs tests/video-recovery.cjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

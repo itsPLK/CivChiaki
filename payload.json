@@ -1,0 +1,32 @@
+{
+  "id": "chiaki-civswitch",
+  "name": "Chiaki",
+  "author": "PLK",
+  "release": "0.1.0",
+  "description": "PlayStation Remote Play for CivHomebrew. H.264 video and stereo audio.",
+  "api": 1,
+  "scripts": [
+    "app/notices.js",
+    "dist/runtime/chiaki-core.js",
+    "app/src/runtime.js",
+    "app/vendor/forge-aes.js",
+    "app/src/native.js",
+    "app/vendor/native-io.js",
+    "app/vendor/telemetry.js",
+    "app/vendor/native-texture.js",
+    "app/vendor/native-media.js",
+    "app/vendor/controller-input.js",
+    "app/vendor/keyboard.js",
+    "app/src/store.js",
+    "app/src/worker-transfer.js",
+    "app/vendor/worker-native.js",
+    "app/src/worker.js",
+    "app/src/fec.js",
+    "app/src/h264.js",
+    "app/src/crypto.js",
+    "app/src/native-crypto.js",
+    "app/src/client.js",
+    "app/src/ui.js"
+  ],
+  "icon": "app/assets/chiaki.png"
+}

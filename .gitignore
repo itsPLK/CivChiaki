@@ -1,0 +1,9 @@
+build/
+dist/
+toolchains/
+third_party/emsdk/
+third_party/mbedtls/
+third_party/nanopb/
+__pycache__/
+.venv/
+.DS_Store
