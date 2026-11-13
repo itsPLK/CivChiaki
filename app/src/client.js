@@ -14,7 +14,7 @@
  }
  async function create(options){
   options=options||{};var events=[],core=null,media=null,video=null,io=null,fec=null,worker=null,controller=null,closed=false,closing=false,stopping=null;
-  var activeHost=null,settings=null,registrationHost=null,fatal=null,paused=false,lastInput="",exitHeld=false,pulse=0,pulseUntil=0,crypto=g.CivChiakiCrypto?g.CivChiakiCrypto.create():null;
+  var activeHost=null,settings=null,registrationHost=null,fatal=null,paused=false,lastInput="",gate=inputGate(),pulse=0,pulseUntil=0,crypto=g.CivChiakiCrypto?g.CivChiakiCrypto.create():null;
   async function stage(name){if(options.onStage)await options.onStage(name);}
   function queue(type,data){events.push({type:type,data:data});}
   function failure(error){if(!fatal){fatal=error;queue("error",error.message);}}
@@ -80,12 +80,13 @@
   }
   function input(value){
    if(!value||!value.state)return;
-   if(value.exit&&!exitHeld){paused=!paused;neutral();queue("menu",paused);}exitHeld=!!value.exit;
+   var s=value.state,buttons=0,now=Date.now(),gated=gate.filter(s[0],value.exit,now);
+   if(gated.toggle){paused=!paused;neutral();queue("menu",paused);}
    if(paused||closing)return;
-   var s=value.state,flags=s[0],buttons=0;
+   var flags=gated.flags;if(gated.pulse){pulse|=gated.pulse;pulseUntil=now+100;}
    var map=[[0x1000,1],[0x2000,2],[0x4000,4],[0x8000,8],[4,16],[8,32],[1,64],[2,128],[0x100,256],[0x200,512],[0x40,1024],[0x80,2048],[0x10,4096],[0x20,8192]];
    for(var p of map)if(flags&p[0])buttons|=p[1];
-   if(Date.now()>=pulseUntil)pulse=0;buttons|=pulse;
+   if(now>=pulseUntil)pulse=0;buttons|=pulse;
    var state=[buttons,s[1],s[2],s[3],-s[4],s[5],-s[6]].map(function(n,i){return i>=3?Math.max(-32768,Math.min(32767,n)):n;}),signature=state.join(",");
    if(signature!==lastInput){core._cc_controller.apply(core,state);lastInput=signature;}
   }
@@ -137,12 +138,27 @@
    },
    loginPin:function(pin){if(! /^\d{4}$/.test(pin))throw Error("Enter a four-digit console login PIN");withBytes([ascii(pin)],function(p){check(core._cc_login_pin(p[0]),"Login PIN");});},
    button:function(button){if(core._cc_mode()===2){neutral();pulse=button&0xffff;pulseUntil=Date.now()+100;core._cc_controller(pulse,0,0,0,0,0,0);lastInput="";}},
-   pause:function(){paused=true;neutral();},resume:function(){paused=false;lastInput="";},
+   pause:function(){paused=true;neutral();},resume:function(){paused=false;lastInput="";gate.reset();},
    rumble:function(low,high){if(!paused&&controller&&controller.rumble)controller.rumble(0,low*257,high*257);},
    stop:stop,
    close:async function(){if(closed)return;closing=true;await stop();if(controller)controller.close();await stage("controller-closed");await fec.close();await stage("worker-closed");if(crypto)crypto.close();await stage("crypto-closed");io.close();await stage("io-closed");closed=true;},
    state:function(){return {mode:core._cc_mode(),paused:paused,profile:settings?Object.assign({},settings):null,pumpBudgetMs:options.pumpBudgetMs||12,serviceBudgetMs:options.serviceBudgetMs||4,host:activeHost?{address:activeHost.address,name:activeHost.name,target:activeHost.target}:null,crypto:crypto?crypto.stats():null,verifyVideoMac:!!options.verifyVideoMac,videoMacSkipped:core._cc_video_mac_skipped_count?core._cc_video_mac_skipped_count():null,batchVideoDecrypt:options.batchVideoDecrypt!==false,videoFramesDecrypted:core._cc_video_decrypt_frames?core._cc_video_decrypt_frames():null,videoTask:options.videoTask===true,latencyControl:options.latencyControl!==false,congestionSignals:core._cc_congestion_signals?core._cc_congestion_signals():null,recovery:core._cc_recovery_metrics?Array.from(new Float64Array(core.HEAPU8.buffer,core._cc_recovery_metrics(),2)):null,videoQueue:core._cc_video_queue_metrics?Array.from(new Float64Array(core.HEAPU8.buffer,core._cc_video_queue_metrics(),4)):null,runtime:core._cc_runtime_metrics?Array.from(new Float64Array(core.HEAPU8.buffer,core._cc_runtime_metrics(),41)):null,worker:fec.stats(),network:io.stats||null,media:media?media.stats():null};}
   };
  }
- g.CivChiakiClient={create:create,account:account,events:EVENT};
+ // Filters controller flags before they reach the console. Buttons still down when the
+ // menu opens or closes (−/+, the menu's confirm press) are dropped until released.
+ // −/+ (0x10/0x20) are held back 200 ms so pressing them together for the menu doesn't
+ // leak the first one; a quicker tap is replayed on release as a Share/Options pulse.
+ function inputGate(){
+  var held=0,since=0,tap=0,exitHeld=false;
+  function reset(){held=-1;since=0;tap=0;}
+  return {reset:reset,filter:function(flags,exit,now){
+   var toggle=!!exit&&!exitHeld,pulse=0;exitHeld=!!exit;if(toggle)reset();
+   if(held===-1)held=flags;held&=flags;flags&=~held;
+   if(flags&0x30){if(!since)since=now;tap|=flags&0x30;if(now-since<200)flags&=~0x30;else tap=0;}
+   else{if(tap)pulse=(tap&0x10?4096:0)|(tap&0x20?8192:0);since=0;tap=0;}
+   return {flags:flags,pulse:pulse,toggle:toggle};
+  }};
+ }
+ g.CivChiakiClient={create:create,inputGate:inputGate,account:account,events:EVENT};
 })(typeof window!=="undefined"?window:globalThis);

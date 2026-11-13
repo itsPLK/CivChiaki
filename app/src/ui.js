@@ -3,67 +3,124 @@
  "use strict";
  var g=window,previous=g.__civswitchApp;if(previous&&previous.close)await previous.close();
  var finish,lifetime=new Promise(function(r){finish=r;}),closed=false,closing=false,frame=null,serviceTimer=null,client=null,store=null,state=null,screen="hosts",selected=0,controls=[],removers=[],subscription=null;
+ // Keep in sync with "release" in payload.json (checked by tests/package-smoke.cjs).
+ var VERSION="0.2.0";
+ // Palette from the Chiaki icon: lime/pale-yellow over deep teal.
+ var C={bg:"#0d1714",text:"#f1f5e4",muted:"#a9bba3",dim:"#7d9078",accent:"#b5d33d",soft:"#eef07c",button:"#14211d",border:"#2a3b33",selected:"#27391c",card:"rgba(13,23,20,0.95)",overlay:"rgba(8,14,12,0.72)",danger:"#e2705c",dangerBg:"#3b1f19"};
  var diagnostics=[],draft={address:"",target:1000100,account:"",pin:""},busy=false,menu=false,streaming=false,selectedHost=null,discovered={};
  function record(message){diagnostics.push({time:Date.now(),message:String(message).slice(0,512)});if(diagnostics.length>100)diagnostics.shift();}
  function listen(target,name,fn){target.addEventListener(name,fn,true);removers.push(function(){target.removeEventListener(name,fn,true);});}
  function node(tag,parent,style,text){var e=document.createElement(tag);Object.assign(e.style,style||{});if(text!==undefined)e.textContent=text;if(parent)parent.appendChild(e);return e;}
- var root=node("div",document.body,{position:"fixed",left:"0",right:"0",top:"0",bottom:"0",backgroundColor:"#0b111b",color:"#eff4fb",fontFamily:"Arial, sans-serif",zIndex:"2",display:"flex",flexDirection:"column",padding:"48px 64px",boxSizing:"border-box",outline:"none"});
+ var root=node("div",document.body,{position:"fixed",left:"0",right:"0",top:"0",bottom:"0",backgroundColor:C.bg,color:C.text,fontFamily:"Arial, sans-serif",zIndex:"2",display:"flex",flexDirection:"column",padding:"48px 64px",boxSizing:"border-box",outline:"none"});
  root.id="civchiaki";root.tabIndex=-1;
  var image=node("div",root,{position:"absolute",left:"0",top:"0",right:"0",bottom:"0",backgroundColor:"#000",backgroundSize:"contain",backgroundPosition:"center",backgroundRepeat:"no-repeat",display:"none"});
- var overlay=node("div",root,{position:"absolute",left:"16px",top:"16px",padding:"8px 12px",backgroundColor:"rgba(0,0,0,0.6)",color:"#d8f3ff",fontFamily:"monospace",fontSize:"16px",lineHeight:"21px",whiteSpace:"pre",borderRadius:"6px",display:"none",pointerEvents:"none"});
+ var overlay=node("div",root,{position:"absolute",left:"16px",top:"16px",padding:"8px 12px",backgroundColor:C.overlay,color:C.soft,fontFamily:"monospace",fontSize:"16px",lineHeight:"21px",whiteSpace:"pre",borderRadius:"6px",display:"none",pointerEvents:"none"});
  var panel=node("div",root,{position:"relative",display:"flex",flexDirection:"column",flexGrow:"1"});
- var eyebrow=node("div",panel,{fontSize:"17px",letterSpacing:"3px",color:"#7abfff",marginBottom:"8px"},"REMOTE PLAY / CIVHOMEBREW");
+ var eyebrow=node("div",panel,{fontSize:"17px",letterSpacing:"3px",color:C.accent,marginBottom:"8px"},"CIVCHIAKI v"+VERSION);
  var title=node("div",panel,{fontSize:"48px",marginBottom:"16px"},"Chiaki");
- var status=node("div",panel,{fontSize:"21px",color:"#b8c9dd",minHeight:"32px",marginBottom:"20px"},"Loading saved consoles…");status.setAttribute("role","status");
- var content=node("div",panel,{display:"flex",flexDirection:"column",maxWidth:"900px",flexGrow:"1",overflowY:"auto"});
- var footer=node("div",panel,{fontSize:"17px",color:"#8fa3bc",marginTop:"20px"},"D-pad  Move     A  Select     B  Back");
+ var status=node("div",panel,{fontSize:"21px",color:C.muted,minHeight:"32px",marginBottom:"20px"},"Loading saved consoles…");status.setAttribute("role","status");
+ var content=node("div",panel,{display:"flex",flexDirection:"column",maxWidth:"900px",flexGrow:"1",minHeight:"0",overflowY:"auto"}),into=content,split=-1;
+ var footer=node("div",panel,{fontSize:"17px",color:C.dim,marginTop:"20px",whiteSpace:"pre"},"D-pad  Move     A  Select     B  Back");
  var keyboard=g.CivKeyboard.create({root:root,native:function(){return g.CivChiakiNative.available;},focus:function(){root.focus();},error:function(s){notice(s);}});
  function notice(text){status.textContent=text;record(text);}
- function paint(){controls.forEach(function(c,i){c.node.style.borderColor=i===selected?"#7abfff":"#2c3b50";c.node.style.backgroundColor=i===selected?"#203e60":"#121e2c";c.node.setAttribute("data-selected",i===selected?"true":"false");});}
- function clear(){while(content.firstChild)content.removeChild(content.firstChild);controls=[];selected=0;}
+ function paint(){controls.forEach(function(c,i){var on=i===selected;c.node.style.borderColor=on?C.accent:C.border;c.node.style.backgroundColor=on?C.selected:C.button;if(c.paint)c.paint(on);c.node.setAttribute("data-selected",i===selected?"true":"false");});var n=controls[selected]&&controls[selected].node;if(n){var top=n.offsetTop-content.offsetTop;if(top<content.scrollTop)content.scrollTop=top;else if(top+n.offsetHeight>content.scrollTop+content.clientHeight)content.scrollTop=top+n.offsetHeight-content.clientHeight;}}
+ function clear(){while(content.firstChild)content.removeChild(content.firstChild);controls=[];selected=0;into=content;split=-1;content.style.maxWidth="900px";content.style.flexDirection="column";}
  function action(label,fn,adjust){
-  var i=controls.length,e=node("button",content,{display:"flex",alignItems:"center",minHeight:"56px",marginBottom:"10px",padding:"12px 20px",border:"2px solid #2c3b50",borderRadius:"10px",color:"#eff4fb",backgroundColor:"#121e2c",fontFamily:"Arial, sans-serif",fontSize:"22px",textAlign:"left",outline:"none"},label);e.type="button";e.tabIndex=-1;
-  function run(){if(closed||closing||busy||keyboard.active())return;selected=i;paint();Promise.resolve().then(fn).catch(function(error){notice(error.message);busy=false;});}
-  controls.push({node:e,run:run,adjust:adjust?function(delta){if(closed||closing||busy||keyboard.active())return;Promise.resolve().then(function(){return adjust(delta);}).catch(function(error){notice(error.message);});}:null});e.addEventListener("click",run);return e;
+  var i=controls.length,e=node("button",into,{display:"flex",alignItems:"center",flexShrink:"0",minHeight:"56px",marginBottom:"10px",padding:"12px 20px",border:"2px solid "+C.border,borderRadius:"10px",color:C.text,backgroundColor:C.button,fontFamily:"Arial, sans-serif",fontSize:"22px",textAlign:"left",outline:"none"},label);e.type="button";e.tabIndex=-1;
+  // One action at a time: presses during a slow action (first client start) are ignored, and the
+  // pressed button dims so the press visibly registered.
+  function run(){if(closed||closing||busy||running||keyboard.active())return;selected=i;paint();running=true;e.style.opacity="0.6";Promise.resolve().then(fn).catch(function(error){notice(error.message);busy=false;}).then(function(){running=false;e.style.opacity="1";});}
+  controls.push({node:e,paint:null,run:run,adjust:adjust?function(delta){if(closed||closing||busy||keyboard.active())return;Promise.resolve().then(function(){return adjust(delta);}).catch(function(error){notice(error.message);});}:null});e.addEventListener("click",run);return e;
+ }
+ function section(label){node("div",into,{fontSize:"15px",letterSpacing:"3px",color:C.dim,margin:"18px 0 10px",flexShrink:"0"},label.toUpperCase());}
+ function compact(e){Object.assign(e.style,{minHeight:"46px",padding:"8px 20px",fontSize:"20px",marginBottom:"8px"});return e;}
+ // Console card: platform badge, then name over address/status.
+ function consoleCard(target,name,detail,fn,found){
+  var e=action("",fn);Object.assign(e.style,{minHeight:"84px",padding:"12px 20px"});
+  var badge=node("span",e,{display:"flex",justifyContent:"center",alignItems:"center",width:"68px",height:"44px",flexShrink:"0",marginRight:"20px",borderRadius:"8px",fontSize:"21px",color:found?C.accent:C.bg,backgroundColor:found?"transparent":C.accent,border:"2px solid "+C.accent},target>=1000000?"PS5":"PS4");
+  var text=node("span",e,{display:"flex",flexDirection:"column",flexGrow:"1"});node("span",text,{fontSize:"24px",marginBottom:"4px"},name);node("span",text,{fontSize:"17px",color:C.muted},detail);
+  return e;
+ }
+ // Text field row: label on the left, an input-like box on the right.
+ function field(label,value,max,set,password){
+  var e=action("",async function(){var text=await keyboard.edit("",max,!!password,label);if(text!==null){await set(text);rerender();}});
+  node("span",e,{flexGrow:"1"},label);
+  var box=node("span",e,{width:"340px",padding:"6px 14px",backgroundColor:C.bg,border:"2px solid "+C.border,borderRadius:"6px",color:value?C.text:C.dim,overflow:"hidden",whiteSpace:"nowrap"},value||"Press A to enter");
+  controls[controls.length-1].paint=function(on){box.style.borderColor=on?C.accent:C.border;};
+  return e;
+ }
+ // Picker row: "Label        ◀ value ▶". Left/right step without wrapping; A cycles.
+ // Arrows are CSS triangles because the game font lacks geometric-shape glyphs.
+ function choice(label,options,current,set){
+  var i=Math.max(0,options.findIndex(function(o){return o[0]===current;}));
+  var e=action("",function(){return set(options[(i+1)%options.length][0]);},function(d){var j=Math.max(0,Math.min(options.length-1,i+d));if(j!==i)return set(options[j][0]);});
+  node("span",e,{flexGrow:"1"},label);
+  function arrow(left){return node("span",e,{width:"0",height:"0",borderTop:"9px solid transparent",borderBottom:"9px solid transparent",borderLeft:left?"0":"12px solid "+C.dim,borderRight:left?"12px solid "+C.dim:"0"});}
+  var prev=arrow(true),value=node("span",e,{display:"flex",justifyContent:"center",width:"220px",flexShrink:"0",color:C.soft,padding:"0 12px"},options[i][1]),next=arrow(false);
+  controls[controls.length-1].paint=function(on){prev.style.opacity=i>0?"1":"0.25";next.style.opacity=i<options.length-1?"1":"0.25";var c=on?C.accent:C.dim;prev.style.borderRightColor=c;next.style.borderLeftColor=c;};
+  return e;
  }
  function show(name){
   screen=name;clear();image.style.display=streaming?"flex":"none";
   panel.style.display=streaming&&!menu?"none":"flex";
-  panel.style.backgroundColor=streaming?"rgba(11,17,27,0.94)":"transparent";
+  // While streaming, the controls menu floats as a padded card over the video.
+  Object.assign(panel.style,streaming?{backgroundColor:C.card,padding:"32px 40px",borderRadius:"16px",border:"1px solid "+C.border,width:"680px",maxWidth:"100%",margin:"auto",flexGrow:"0",boxSizing:"border-box"}:{backgroundColor:"transparent",padding:"0",borderRadius:"0",border:"none",width:"auto",maxWidth:"none",margin:"0",flexGrow:"1"});
   if(name==="hosts"){
    title.textContent="Your consoles";status.textContent="PlayStation Remote Play · H.264";
-   if(state&&state.hosts.length)state.hosts.forEach(function(host){action((host.target>=1000000?"PS5":"PS4")+"   "+(host.name||host.address)+"    "+host.address,function(){selectedHost=host;show("console");});});
-   else node("div",content,{fontSize:"24px",color:"#94a9c2",marginBottom:"28px",padding:"30px 0"},"Add a console to start playing.");
-   Object.keys(discovered).forEach(function(address){var h=discovered[address];if(state.hosts.some(function(saved){return saved.address===address;}))return;action("Found: "+h.name+"   "+address,function(){draft.address=address;draft.target=h.target;show("register");});});
-   action("＋  Add console",function(){show("register");});action("Find consoles on network",async function(){await ensureClient();client.discover();busy=true;notice("Searching the local network… B cancels.");});action("Stream settings",function(){show("settings");});action("Close Chiaki",close);
+   // Two columns: consoles on the left, menu on the right; ← → jump between them.
+   content.style.maxWidth="1152px";content.style.flexDirection="row";
+   into=node("div",content,{display:"flex",flexDirection:"column",flexGrow:"1",minWidth:"0",marginRight:"32px"});
+   section("Consoles");
+   var found=Object.keys(discovered).filter(function(address){return !state.hosts.some(function(saved){return saved.address===address;});});
+   state.hosts.forEach(function(host){consoleCard(host.target,host.name||host.address,host.address+"  ·  Ready to connect",function(){selectedHost=host;show("console");});});
+   found.forEach(function(address){var h=discovered[address];consoleCard(h.target,h.name||address,address+"  ·  Found on network, press A to register",function(){draft.address=address;draft.target=h.target;show("register");},true);});
+   if(!state.hosts.length&&!found.length)node("div",into,{fontSize:"21px",color:C.muted,marginBottom:"10px",padding:"24px 20px",border:"2px dashed "+C.border,borderRadius:"10px",flexShrink:"0"},"No consoles yet. Add one by address or search your network.");
+   split=controls.length;into=node("div",content,{display:"flex",flexDirection:"column",width:"340px",flexShrink:"0"});
+   section("Menu");
+   [["+  Add console",function(){show("register");}],["Find consoles on network",async function(){await ensureClient();client.discover();busy=true;notice("Searching the local network… B cancels.");}],["Stream settings",function(){show("settings");}],["Close Chiaki",close]].forEach(function(m){compact(action(m[0],m[1]));});
   }else if(name==="console"){
    title.textContent=selectedHost.name||selectedHost.address;status.textContent=(selectedHost.target>=1000000?"PlayStation 5":"PlayStation 4")+" · "+selectedHost.address;
-   action("Connect",connect);action("Wake console",async function(){await ensureClient();client.wakeup(selectedHost);notice("Wake request sent. Allow the console a few seconds, then connect.");});action("Remove from Chiaki",async function(){state=await store.removeHost(selectedHost.address);show("hosts");});action("Back",function(){show("hosts");});
+   action("Connect",connect);action("Wake console",async function(){await ensureClient();client.wakeup(selectedHost);notice("Wake request sent. Allow the console a few seconds, then connect.");});action("Remove from Chiaki",function(){show("remove");});action("Back",function(){show("hosts");});
+  }else if(name==="remove"){
+   // Deliberately heavy: focus starts on Keep, and Remove needs three presses in a row.
+   // Moving off the Remove button resets the count.
+   title.textContent="Remove "+(selectedHost.name||selectedHost.address)+"?";
+   status.textContent="Chiaki will forget this console's pairing. To use it again you'll need a new registration PIN from the console.";
+   action("Keep console",function(){show("console");});
+   var left=3,removeButton=action("",async function(){
+    if(--left>0){removeButton.textContent="Press A "+left+" more time"+(left>1?"s":"")+" to remove";return;}
+    var gone=selectedHost;state=await store.removeHost(gone.address);selectedHost=null;show("hosts");notice((gone.name||gone.address)+" removed.");
+   });
+   removeButton.style.color=C.danger;
+   controls[controls.length-1].paint=function(on){if(!on){left=3;removeButton.textContent="Remove permanently (press A 3 times)";}removeButton.style.borderColor=on?C.danger:C.border;removeButton.style.backgroundColor=on?C.dangerBg:C.button;};
   }else if(name==="register"){
    title.textContent="Add a console";status.textContent="On your PlayStation: Settings → Remote Play → Link / Add Device";
    field("Console address",draft.address,15,async function(v){draft.address=v;});
-   action("Console: "+({1000100:"PS5",1000:"PS4 · 10+",900:"PS4 · 9",800:"PS4 · 8"})[draft.target],function(){var types=[1000100,1000,900,800];draft.target=types[(types.indexOf(draft.target)+1)%types.length];show("register");});
+   choice("Console",[[1000100,"PS5"],[1000,"PS4 · 10+"],[900,"PS4 · 9"],[800,"PS4 · 8"]],draft.target,function(v){draft.target=v;rerender();});
    field("PSN account ID (Base64)",draft.account,12,async function(v){draft.account=v;});field("Registration PIN",draft.pin?"••••••••":"",8,async function(v){draft.pin=v;},true);
    action("Register console",register);action("Back",function(){show("hosts");});
   }else if(name==="settings"){
    title.textContent="Stream settings";status.textContent="H.264 · SDR · stereo audio";
    var s=state.settings;
-   function save(change){return async function(){state=await store.saveSettings(Object.assign({},state.settings,change(state.settings)));rerender();};}
-   action("Resolution: "+["","360p","540p","720p","1080p"][s.resolution],save(function(v){return {resolution:v.resolution%4+1};}),function(d){return save(function(v){return {resolution:Math.max(1,Math.min(4,v.resolution+d))};})();});
-   action("Frame rate: "+s.fps+" FPS",save(function(v){return {fps:v.fps===60?30:60};}),function(d){return save(function(){return {fps:d>0?60:30};})();});
-   action("Bitrate: "+bitrateLabel(s),save(function(v){return {bitrate:g.CivChiakiStore.nextBitrate(v.bitrate)};}),function(d){return save(function(v){return {bitrate:g.CivChiakiStore.stepBitrate(v.bitrate,d)};})();});
-   action("Debug overlay: "+(s.overlay?"On":"Off"),toggleOverlay);
+   function save(change){return async function(){overlayPrevious=null;state=await store.saveSettings(Object.assign({},state.settings,change(state.settings)));rerender();};}
+   function set(key){return function(v){var c={};c[key]=v;return save(function(){return c;})();};}
+   choice("Resolution",[[1,"360p"],[2,"540p"],[3,"720p"],[4,"1080p"]],s.resolution,set("resolution"));
+   choice("Frame rate",[[30,"30 FPS"],[60,"60 FPS"]],s.fps,set("fps"));
+   choice("Bitrate",g.CivChiakiStore.bitrateChoices.map(function(k){return [k,bitrateLabel({resolution:s.resolution,fps:s.fps,bitrate:k})];}),s.bitrate,set("bitrate"));
+   choice("Confirm button",[[false,"A  (Nintendo)"],[true,"B  (PlayStation)"]],!!s.swapButtons,set("swapButtons"));
+   choice("Debug overlay",[[false,"Off"],[true,"On"]],!!s.overlay,set("overlay"));
    action("Back",function(){show("hosts");});
   }else if(name==="stream"){
-   title.textContent=selectedHost.name||selectedHost.address;status.textContent=menu?"Stream paused for controls":"Connecting…";
+   title.textContent=selectedHost.name||selectedHost.address;status.textContent=menu?"":"Connecting…";
    action("Resume",function(){menu=false;client.resume();show("stream");});
    action("PS button",function(){client.button(1<<15);menu=false;client.resume();show("stream");});
    action("Touchpad click",function(){client.button(1<<14);menu=false;client.resume();show("stream");});
    action("Debug overlay: "+(state.settings.overlay?"On":"Off"),toggleOverlay);
    action("Disconnect",disconnect);
-   footer.textContent="− and + together  Open controls     B  Resume";
+   footer.textContent="D-pad  Move     "+keys().accept+"  Select     "+keys().back+"  or  − +  Back to game";
   }
-  if(name!=="stream")footer.textContent=name==="settings"?"D-pad  Move     ◀ ▶  Change     A  Select     B  Back":"D-pad  Move     A  Select     B  Back";
+  var k=keys();
+  if(name!=="stream")footer.textContent="D-pad  Move     "+(name==="hosts"&&split>0?"← →  Consoles / Menu     ":name==="settings"||name==="register"?"← →  Change     ":"")+k.accept+"  Select     "+k.back+"  "+(name==="hosts"?"Close":"Back");
   paint();
  }
  function bitrateLabel(s){var mbps=function(k){return (k/1000)+" Mbps";};return s.bitrate?mbps(s.bitrate):"Auto ("+mbps(g.CivChiakiStore.autoBitrate(s))+")";}
@@ -90,10 +147,11 @@
   lines.push("Chiaki    "+Math.round((sample.work-p.work)*100/(dt*1000))+"% of UI thread");
   overlay.textContent=lines.join("\n");
  }
- function field(label,value,max,set,password){action(label+": "+(value||"Enter…"),async function(){var text=await keyboard.edit("",max,!!password,label);if(text!==null){await set(text);show("register");}});}
  async function ensureClient(){
   if(client)return client;if(!g.CivChiakiNative.available)throw Error("This is a browser preview. Launch the .civapp from CivHomebrew to use Remote Play.");
-  notice("Preparing Remote Play…");client=await g.CivChiakiClient.create({onImage:function(url){image.style.backgroundImage=url?'url("'+url+'")':"";}});return client;
+  // Share one start-up between callers so repeated presses can't create two clients.
+  if(!clientPromise){notice("Preparing Remote Play…");clientPromise=g.CivChiakiClient.create({onImage:function(url){image.style.backgroundImage=url?'url("'+url+'")':"";}}).then(function(c){client=c;return c;},function(error){clientPromise=null;throw error;});}
+  return clientPromise;
  }
  async function register(){
   if(!g.CivChiakiStore.ipv4(draft.address))throw Error("Enter the console’s IPv4 address.");g.CivChiakiClient.account(draft.account);if(! /^\d{8}$/.test(draft.pin))throw Error("Enter the eight-digit registration PIN shown on your console.");
@@ -134,21 +192,23 @@
   if(keyboard.active()){keyboard.cancel();return;}
   if(busy){if(client)client.stop().catch(function(e){notice(e.message);});return;}
   if(streaming){menu=false;client.resume();show("stream");return;}
-  if(screen==="hosts")close();else show("hosts");
+  if(screen==="hosts")close();else show(screen==="remove"?"console":"hosts");
  }
- var lastAction="",nextRepeat=0,owner={owner:"civchiaki"};
+ var running=false,clientPromise=null,lastConsole=0,lastAction="",nextRepeat=0,owner={owner:"civchiaki"};
  function navigate(name,phase){
   if(closed||closing||keyboard.active())return;if(name==="keyboard-escape")name="cancel";
   if(phase!==0&&phase!==3){lastAction="";return;}
   if(streaming&&!menu)return;
   if(name==="cancel"){if(phase===0)back();return;}if(busy)return;
   if(name==="accept"){if(phase===0&&controls[selected])controls[selected].run();return;}
-  if(name==="nav-left"||name==="nav-right"){if(phase===0&&controls[selected]&&controls[selected].adjust)controls[selected].adjust(name==="nav-right"?1:-1);return;}
+  if(name==="nav-left"||name==="nav-right"){if(phase!==0||!controls[selected])return;if(controls[selected].adjust)controls[selected].adjust(name==="nav-right"?1:-1);else if(split>0&&split<controls.length){var target=name==="nav-right"?split:Math.min(split-1,lastConsole);if((selected<split)!==(target<split)){if(selected<split)lastConsole=selected;selected=target;paint();}}return;}
   var delta=name==="nav-up"?-1:name==="nav-down"?1:0;if(!delta||!controls.length)return;
   var now=Date.now();if(phase===3&&(lastAction!==name||now<nextRepeat))return;
   lastAction=name;nextRepeat=now+(phase===0?350:140);selected=(selected+delta+controls.length)%controls.length;paint();
  }
- function nativeAction(name,phase,x,y){if(name==="nav-move"){x=Number(x);y=Number(y);if(Math.abs(x)>=0.5&&Math.abs(x)>Math.abs(y))name=x>0?"nav-right":"nav-left";else if(Math.abs(y)>=0.5)name=y>0?"nav-up":"nav-down";else return;}navigate(name,Number(phase));}
+ // Optional PlayStation-style layout: the bottom face button (Nintendo B) confirms.
+ function keys(){return state&&state.settings.swapButtons?{accept:"B",back:"A"}:{accept:"A",back:"B"};}
+ function nativeAction(name,phase,x,y){if(state&&state.settings.swapButtons&&(name==="accept"||name==="cancel"))name=name==="accept"?"cancel":"accept";if(name==="nav-move"){x=Number(x);y=Number(y);if(Math.abs(x)>=0.5&&Math.abs(x)>Math.abs(y))name=x>0?"nav-right":"nav-left";else if(Math.abs(y)>=0.5)name=y>0?"nav-up":"nav-down";else return;}navigate(name,Number(phase));}
  listen(g,"keydown",function(e){if(keyboard.active())return;var name={ArrowUp:"nav-up",ArrowDown:"nav-down",ArrowLeft:"nav-left",ArrowRight:"nav-right",Enter:"accept",Escape:"cancel"}[e.key];if(e.key==="F8"){close();e.preventDefault();e.stopImmediatePropagation();}else if(e.key==="Escape"&&streaming&&!menu){client.pause();menu=true;show("stream");e.preventDefault();e.stopImmediatePropagation();}else if(name){navigate(name,e.repeat?3:0);e.preventDefault();e.stopImmediatePropagation();}});
  listen(g,"blur",function(){if(client)client.pause();if(streaming){menu=true;show("stream");}});
  function gameEvent(e){var d=e.detail||{};if(["nav-move","nav-up","nav-down","nav-left","nav-right","accept","cancel","keyboard-escape"].indexOf(d.name)<0)return;if(!g.engine)nativeAction(d.name,d.status,d.x,d.y);e.preventDefault();e.stopImmediatePropagation();}

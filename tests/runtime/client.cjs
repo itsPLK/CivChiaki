@@ -15,7 +15,20 @@ test('client handles repeated refused connections without retaining native media
  assert.equal(s.mediaClosed,3);assert.equal(s.resumed,3);assert.equal(s.client.state().host,null);await s.client.close();
 });
 test('controller positions become PlayStation buttons and vertical stick directions',async()=>{
- const s=await setup();s.client.connect(host,{resolution:3,fps:60,bitrate:15000});s.input={state:[0x1000|0x10|1,255,128,1000,2000,-3000,-4000],exit:false};s.client.tick();assert.deepEqual(s.calls[0],[1|4096|64,255,128,1000,-2000,-3000,4000]);await s.client.close();
+ const s=await setup();s.client.connect(host,{resolution:3,fps:60,bitrate:15000});s.input={state:[0x1000|0x40|1,255,128,1000,2000,-3000,-4000],exit:false};s.client.tick();assert.deepEqual(s.calls[0],[1|1024|64,255,128,1000,-2000,-3000,4000]);await s.client.close();
+});
+test('input gate: −/+ menu combo leaks neither button; quick taps replay; presses held through menu changes are dropped',()=>{
+ const gate=g.CivChiakiClient.inputGate(),f=(flags,now)=>({...gate.filter(flags,(flags&0x30)===0x30,now)});
+ // Plain buttons pass through.
+ assert.deepEqual(f(0x1000,0),{flags:0x1000,pulse:0,toggle:false});f(0,10);
+ // − then + within 200 ms opens the menu; neither reaches the console, even after the menu closes.
+ assert.equal(f(0x10,100).flags,0);const open=f(0x30,150);assert.equal(open.toggle,true);assert.equal(open.flags,0);
+ assert.deepEqual(f(0x20,180),{flags:0,pulse:0,toggle:false});assert.deepEqual(f(0,200),{flags:0,pulse:0,toggle:false});
+ // The menu's confirm press is still down when the stream resumes: dropped until released.
+ gate.reset();assert.equal(f(0x1000,300).flags,0);assert.equal(f(0x1000,320).flags,0);assert.equal(f(0,340).flags,0);assert.equal(f(0x1000,360).flags,0x1000);f(0,380);
+ // A quick + tap is replayed as an Options pulse on release; a long hold is forwarded after 200 ms.
+ assert.equal(f(0x20,400).flags,0);assert.deepEqual(f(0,450),{flags:0,pulse:8192,toggle:false});
+ assert.equal(f(0x10,500).flags,0);assert.equal(f(0x10,710).flags,0x10);assert.deepEqual(f(0,800),{flags:0,pulse:0,toggle:false});
 });
 test('media callback exceptions are queued and cannot unwind upstream C fibers',async()=>{
  const s=await setup();s.client.connect(host,{resolution:3,fps:60,bitrate:15000});assert.doesNotThrow(()=>s.platform.audioHeader(44100,2,960));assert.ok(s.client.events().some(e=>e.type==='error'&&e.data.includes('audio device unavailable')));await s.client.close();assert.equal(s.core._cc_runtime_tasks(),0);

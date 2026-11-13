@@ -27,7 +27,7 @@ const chromeCleanup=require('./helpers/chrome-cleanup.cjs');const pause=ms=>new 
    __lifetime.then(()=>window.__done=true);await new Promise(r=>setTimeout(r,80));
    return {factory:typeof window.ChiakiCore,pending:!__done,title:document.querySelector('#civchiaki').textContent,buttons:document.querySelectorAll('#civchiaki button').length};
   })()`);
-  assert.equal(result.factory,'function');assert.equal(result.pending,true);assert.match(result.title,/Your consoles/);assert.equal(result.buttons,4);
+  assert.equal(result.factory,'function');assert.equal(result.pending,true);assert.match(result.title,/Your consoles/);assert.ok(result.title.includes('CIVCHIAKI v'+manifest.release),'ui.js VERSION must match payload.json release');assert.equal(result.buttons,4);
   const screenshot=await call('Page.captureScreenshot',{format:'png'});fs.mkdirSync('dist/qa',{recursive:true});fs.writeFileSync('dist/qa/hosts.png',Buffer.from(screenshot.data,'base64'));
   assert.equal(await evaluate(`(async()=>{document.querySelector('#civchiaki button').click();await new Promise(r=>setTimeout(r,20));return document.querySelector('#civchiaki').textContent.includes('Add a console');})()`),true);
   assert.equal(await evaluate(`(async()=>{dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await new Promise(r=>setTimeout(r,20));return document.querySelector('#civchiaki').textContent.includes('Your consoles');})()`),true);

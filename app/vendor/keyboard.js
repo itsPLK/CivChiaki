@@ -25,7 +25,7 @@
     component.overrideText=true;component.isPlaceholderActive=false;
     if(component.onAttributeChanged)component.onAttributeChanged("value",null,"");
     e.input.value="";e.input.maxLength=e.max;e.input.readOnly=false;
-    Object.assign(e.input.style,{width:"100%",fontSize:"28px",color:"#fff",backgroundColor:"#111",padding:"12px",border:"2px solid #00efcf"});
+    Object.assign(e.input.style,{width:"100%",fontSize:"28px",color:"#fff",backgroundColor:"#0d1714",padding:"12px",border:"2px solid #b5d33d"});
     e.originalCallback=component.onVirtualKeyboardTextEntered;
     component.onVirtualKeyboardTextEntered=function(data){
      if(editor!==e)return;var value=data&&typeof data.data==="string"?data.data:e.input.value;
@@ -46,9 +46,9 @@
     e.node=node("div",o.root,{position:"fixed",left:"0",top:"0",width:"1px",height:"1px",opacity:"0",pointerEvents:"none",overflow:"hidden"});e.panel=e.node;
    }else{
     e.node=node("div",o.root,{position:"absolute",left:"0",right:"0",top:"0",bottom:"0",zIndex:"8",backgroundColor:"rgba(0,0,0,0.75)"});
-    e.panel=node("div",e.node,{position:"absolute",left:"160px",top:"100px",width:"960px",padding:"24px",backgroundColor:"#171b1f",border:"1px solid #465157"});
+    e.panel=node("div",e.node,{position:"absolute",left:"160px",top:"100px",width:"960px",padding:"24px",backgroundColor:"#14211d",border:"1px solid #2a3b33"});
     node("div",e.panel,{fontSize:"26px",marginBottom:"16px"},"Enter new "+(label||"value"));
-    node("div",e.panel,{fontSize:"18px",color:"#c8d0d2",marginBottom:"16px"},"Confirm to replace the current value. Cancel keeps it unchanged.");
+    node("div",e.panel,{fontSize:"18px",color:"#a9bba3",marginBottom:"16px"},"Confirm to replace the current value. Cancel keeps it unchanged.");
    }
    e.node.id="text-editor";
    e.keydown=function(event){if(editor!==e||o.native())return;if(event.key==="Escape")finish(e,null);else if(event.key==="Enter")finish(e,e.input.value);else return;event.preventDefault();event.stopImmediatePropagation();};g.addEventListener("keydown",e.keydown,true);

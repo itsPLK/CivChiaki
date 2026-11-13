@@ -12,7 +12,7 @@
  // Left/right: step without wrapping; an unknown saved value steps from Auto.
  function stepBitrate(current,delta){var i=CHOICES.indexOf(current);if(i<0)i=0;return CHOICES[Math.max(0,Math.min(CHOICES.length-1,i+delta))];}
  function ipv4(text){return typeof text==="string"&&/^\d{1,3}(\.\d{1,3}){3}$/.test(text)&&text.split(".").every(function(n){return Number(n)<=255&&String(Number(n))===n;});}
- function settings(s){return !!s&&[1,2,3,4].indexOf(s.resolution)>=0&&[30,60].indexOf(s.fps)>=0&&Number.isInteger(s.bitrate)&&(s.bitrate===0||s.bitrate>=1000&&s.bitrate<=50000)&&(s.overlay===undefined||typeof s.overlay==="boolean");}
+ function settings(s){return !!s&&[1,2,3,4].indexOf(s.resolution)>=0&&[30,60].indexOf(s.fps)>=0&&Number.isInteger(s.bitrate)&&(s.bitrate===0||s.bitrate>=1000&&s.bitrate<=50000)&&(s.overlay===undefined||typeof s.overlay==="boolean")&&(s.swapButtons===undefined||typeof s.swapButtons==="boolean");}
  function host(h){return !!h&&ipv4(h.address)&&[800,900,1000,1000100].indexOf(h.target)>=0&&typeof h.name==="string"&&h.name.length<=128&&/^[a-f0-9]{32}$/.test(h.key)&&/^[a-f0-9]{32}$/.test(h.morning)&&/^[a-f0-9]{12}$/.test(h.mac);}
  function validate(v){return !!v&&v.version===1&&Number.isSafeInteger(v.generation)&&v.generation>=0&&Array.isArray(v.hosts)&&v.hosts.length<=64&&v.hosts.every(host)&&new Set(v.hosts.map(function(h){return h.address;})).size===v.hosts.length&&settings(v.settings);}
  function create(io){

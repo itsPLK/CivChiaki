@@ -23,7 +23,7 @@ test('Auto bitrate follows resolution and frame rate; choices cycle; overlay fla
  let b=0;const seen=[];do{seen.push(b);b=api.nextBitrate(b);}while(b!==0&&seen.length<50);
  assert.deepEqual(seen,Array.from(api.bitrateChoices));assert.equal(api.nextBitrate(16000),0,'unknown saved values return to Auto');
  assert.ok(api.validSettings({resolution:4,fps:60,bitrate:0}));assert.ok(api.validSettings({resolution:4,fps:60,bitrate:0,overlay:true}));
- assert.ok(!api.validSettings({resolution:4,fps:60,bitrate:20}),'Kbps typos stay invalid');assert.ok(!api.validSettings({resolution:4,fps:60,bitrate:0,overlay:'yes'}));
+ assert.ok(!api.validSettings({resolution:4,fps:60,bitrate:20}),'Kbps typos stay invalid');assert.ok(!api.validSettings({resolution:4,fps:60,bitrate:0,overlay:'yes'}));assert.ok(api.validSettings({resolution:4,fps:60,bitrate:0,swapButtons:true}));assert.ok(!api.validSettings({resolution:4,fps:60,bitrate:0,swapButtons:1}));
  const store=api.create(io());const saved=await store.saveSettings({resolution:4,fps:60,bitrate:0,overlay:true});assert.equal(saved.settings.overlay,true);
 });
 test('left/right bitrate steps clamp at Auto and 50 Mbps',()=>{

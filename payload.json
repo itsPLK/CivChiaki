@@ -2,8 +2,8 @@
   "id": "chiaki-civswitch",
   "name": "Chiaki",
   "author": "PLK",
-  "release": "0.1.0",
-  "description": "PlayStation Remote Play for CivHomebrew. H.264 video and stereo audio.",
+  "release": "0.2.0",
+  "description": "PlayStation Remote Play for CivHomebrew.",
   "api": 1,
   "scripts": [
     "app/notices.js",
