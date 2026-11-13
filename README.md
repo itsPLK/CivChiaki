@@ -3,7 +3,7 @@
 </p>
 <h1 align="center">CivChiaki</h1>
 
-<p align="center">PlayStation Remote Play client for <a href="https://github.com/XITRIX/CivHomebrew">CivHomebrew</a>, built on <a href="https://github.com/streetpea/chiaki-ng">Chiaki-NG</a>.</p>
+<p align="center">PlayStation Remote Play client for <a href="https://github.com/XITRIX/CivHomebrew">CivHomebrew</a> on Nintendo Switch 2, built on <a href="https://github.com/streetpea/chiaki-ng">Chiaki-NG</a>.</p>
 
 Video decoding, audio, GPU presentation, sockets and controller input call the
 game's native SDK directly through the primitives the loader provides, using
@@ -17,7 +17,7 @@ in `third_party/chiaki`.
 
 ## Requirements
 
-- CivHomebrew on a Switch 2. Switch 1 is untested.
+- CivHomebrew on a Switch 2. Switch 1 is not supported.
 - To build: Git, Python 3.9+, Node.js 22+, CMake and a C/C++ toolchain.
 
 ## Build and install
@@ -48,12 +48,13 @@ launch **Chiaki**.
    console's **Link Device / Add Device** screen. PSN sign-in is not implemented.
 4. Select the console and **Connect**. If asked, enter the 4-digit login PIN.
 
-Defaults: 720p, 30 FPS, 8 Mbps. Settings offer 360p/540p/720p/1080p, 30/60 FPS
-and 1–50 Mbps.
+Defaults: 720p, 30 FPS, Auto bitrate (10 Mbps at 720p30). Settings offer
+360p/540p/720p/1080p, 30/60 FPS and Auto or 2–50 Mbps.
 
 Controls:
 
-- D-pad / A / B: navigate, select, back.
+- D-pad / A / B: navigate, select, back. **Stream settings → Confirm button**
+  swaps A and B in Chiaki's menus to match PlayStation (bottom button confirms).
 - Switch B/A/Y/X map by position to Cross/Circle/Square/Triangle.
 - Minus/Plus map to Share/Options. Hold both to open stream controls (PS,
   touchpad click, disconnect).
